@@ -8,12 +8,12 @@ export default function UploadForm() {
   const [videoUrl, setVideoUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Remove the hardcoded URL and use environment variable
   const BURNER_URL = process.env.NEXT_PUBLIC_BURNER_URL;
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (loading) return; // prevent double click
+    if (loading) return;
+
     const file = e.target.fileInput.files[0];
     if (!file) return alert("Please select a file");
 
@@ -24,17 +24,27 @@ export default function UploadForm() {
       // 1. Transcribe
       const formData = new FormData();
       formData.append("file", file);
+
       const res = await fetch("/api/transcribe", { method: "POST", body: formData });
       const data = await res.json();
+      console.log("Transcription response:", data);
+
       setTranscript(data.text || "Error transcribing");
 
       // 2. Burn captions
       if (data.srt) {
         const burnForm = new FormData();
         burnForm.append("video", file);
-        burnForm.append("srt", new Blob([data.srt], { type: "text/plain" }), "subtitles.srt");
+        burnForm.append(
+          "srt",
+          new Blob([data.srt], { type: "text/plain" }),
+          "subtitles.srt"
+        );
 
-        const burnRes = await fetch(BURNER_URL, { method: "POST", body: burnForm });
+        const burnRes = await fetch(`${BURNER_URL}/burn`, {
+          method: "POST",
+          body: burnForm,
+        });
         if (!burnRes.ok) throw new Error("Burning captions failed");
 
         const blob = await burnRes.blob();
@@ -43,6 +53,7 @@ export default function UploadForm() {
         setStep(3);
       }
     } catch (err) {
+      console.error("Upload error:", err);
       alert("Error: " + err.message);
       setStep(1);
     } finally {
@@ -52,9 +63,7 @@ export default function UploadForm() {
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    if (file) setSelectedFile(file);
   };
 
   const steps = [
@@ -76,7 +85,7 @@ export default function UploadForm() {
               }`}
             >
               <span className="text-gray-400">
-                {selectedFile 
+                {selectedFile
                   ? `Selected: ${selectedFile.name}`
                   : "Click or drag a video file"}
               </span>
@@ -91,9 +100,10 @@ export default function UploadForm() {
 
             <button
               type="submit"
+              disabled={loading}
               className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-lg shadow-lg transition"
             >
-              Upload & Burn Captions
+              {loading ? "Processing..." : "Upload & Burn Captions"}
             </button>
           </form>
         );
@@ -106,7 +116,7 @@ export default function UploadForm() {
             {transcript && (
               <div className="mt-8 w-full p-6 rounded-xl bg-white/5 border border-white/10">
                 <h3 className="font-semibold text-blue-300 mb-2">📝 Transcription</h3>
-                <p className="text-gray-200">{transcript}</p>
+                <p className="text-gray-200 whitespace-pre-line">{transcript}</p>
               </div>
             )}
           </div>
@@ -116,13 +126,9 @@ export default function UploadForm() {
         return (
           <div className="space-y-6">
             <div className="aspect-video rounded-xl overflow-hidden bg-black/30">
-              <video 
-                controls 
-                className="w-full h-full" 
-                src={videoUrl}
-              ></video>
+              <video controls className="w-full h-full" src={videoUrl}></video>
             </div>
-            
+
             <div className="flex gap-4">
               <a
                 href={videoUrl}
